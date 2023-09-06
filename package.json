@@ -1,0 +1,28 @@
+{
+  "name": "@mikosoft/httpclient-pptr",
+  "version": "1.0.0",
+  "title": "HTTP Client - Puppeteer",
+  "description": "The HTTP client, powered by Puppeteer and the Chrome/Chromium browser, excels at accessing dynamic web pages.",
+  "keywords": [
+    "http client",
+    "node",
+    "nodejs",
+    "puppeteer",
+    "pptr",
+    "chrome",
+    "chromium"
+  ],
+  "author": "Mikosoft",
+  "license": "MIT",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:miko-soft/httpclient-pptr.git"
+  },
+  "dependencies": {
+    "puppeteer-core": "^19.8.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
