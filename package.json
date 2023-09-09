@@ -1,6 +1,6 @@
 {
   "name": "@mikosoft/httpclient-pptr",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "title": "HTTP Client - Puppeteer",
   "description": "The HTTP client, powered by Puppeteer and the Chrome/Chromium browser, excels at accessing dynamic web pages.",
   "keywords": [
