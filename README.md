@@ -17,7 +17,9 @@ $ npm install --save @mikosoft/httpclient-pptr
 
 
 ## Environment Variables
-- **PROD_MODE** : Boolean (true/false) - When set to "true," it instructs the system to operate in production mode, optimizing memory usage by closing the browser once the page is loaded.
+- **PROD_MODE** : Boolean (true/false) - When set to "true," it instructs the system to operate in production mode, optimizing memory usage by closing the browser once the page is loaded. The **true** is the default value.
+In Linux the env variable can be set with command: ```export PROD_MODE="true"``` . 
+
 
 ## Parameters
  * @param {string} **url** - requested URL - https://www.dex8.com/docs
@@ -25,12 +27,13 @@ $ npm install --save @mikosoft/httpclient-pptr
  * @param {object} **extraHeaders** - additional HTTP request headers - {authorization: 'JWT ...'}
  * @param {number} **timeout** - the request timeout in ms
  * @param {string} **referer** - the referer URL - 'https://www.dex8.com'
- * @param {string} **deviceName** - the device name - 'Desktop Windows'
+ * @param {string} **deviceName** - the device name - 'Desktop Windows' -- [https://pptr.dev/api/puppeteer.knowndevices](https://pptr.dev/api/puppeteer.knowndevices)
  * @param {[offsetX, offsetY]} **windowPosition** - the browser window offset position in pixels [x, y], for example [700, 20]
  * @param {boolean} **scroll** - to scroll the content
  * @param {string} **waitUntil** - don't send response until 'load' | 'domcontentloaded' | 'networkidle0' | 'networkidle2'
  * @param {'new'|'old'|false} **headless** - false => show browser window
- * @param {string[]} **argsAppend** - array of chrome arguments -- https://peter.sh/experiments/chromium-command-line-switches/
+ * @param {string[]} **argsAppend** - array of arguments invoked on chrome start-- [https://peter.sh/experiments/chromium-command-line-switches/](https://peter.sh/experiments/chromium-command-line-switches/)
+ * @param {boolean} **DEBUG**
 
 ## Example
 ```js
@@ -61,10 +64,10 @@ const getUrl = async () => {
     // '--disable-web-security',
     // '--disable-features=IsolateOrigins,site-per-process',
   ];
+  const DEBUG = false;
 
   console.log('asked url:: GET', url);
-  const answer = await httpClientPptr(url, block, extraHeaders, timeout, referer, deviceName, windowPosition, scroll, waitUntil, headless, argsAppend);
-  console.log(`\nanswer:`, util.inspect(answer, false, 3, true));
+v  console.log(`\nanswer:`, util.inspect(answer, false, 3, true));
 };
 
 

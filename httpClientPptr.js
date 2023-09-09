@@ -76,9 +76,10 @@ const my_devices = {
  * @param {string} waitUntil - don't send response until 'load' | 'domcontentloaded' | 'networkidle0' | 'networkidle2'
  * @param {'new'|'old'|false} headless - false => show browser window
  * @param {string[]} argsAppend - array of chrome arguments -- https://peter.sh/experiments/chromium-command-line-switches/
+ * @param {boolean} DEBUG
  * @returns
  */
-const httpClientPptr = async (url, block = [], extraHeaders = {}, timeout = 13000, referer = '', deviceName = 'Desktop Windows', windowPosition = [700, 20], scroll = false, waitUntil = 'load', headless = 'new', argsAppend = []) => {
+const httpClientPptr = async (url, block = [], extraHeaders = {}, timeout = 13000, referer = '', deviceName = 'Desktop Windows', windowPosition = [700, 20], scroll = false, waitUntil = 'load', headless = 'new', argsAppend = [], DEBUG) => {
 
   /*** 1. form answer similar to @mikosoft/httpclient-nodejs */
   const answer = {
@@ -109,7 +110,7 @@ const httpClientPptr = async (url, block = [], extraHeaders = {}, timeout = 1300
   };
 
   // get device
-  const pup_devices = puppeteer.KnownDevices; // https://github.com/puppeteer/puppeteer/blob/master/src/DeviceDescriptors.ts
+  const pup_devices = puppeteer.KnownDevices; // https://pptr.dev/api/puppeteer.knowndevices
   const devices = { ...pup_devices, ...my_devices };
   const device = devices[deviceName];
 
@@ -149,7 +150,7 @@ const httpClientPptr = async (url, block = [], extraHeaders = {}, timeout = 1300
     /* block resources: images, js, css, ... */
     const rt = request.resourceType(); // resource type
     const block_tf = block.indexOf(rt) !== -1;
-    // console.log('resourceType:: ', rt, block_tf, request.method(), request.url());
+    DEBUG && console.log('on request::', rt, block_tf, request.method(), request.url());
 
     if (block_tf) { request.abort(); }
     else { request.continue({ headers }); }
@@ -162,14 +163,14 @@ const httpClientPptr = async (url, block = [], extraHeaders = {}, timeout = 1300
   /*** 4. get status code & HTTP method (GET, POST, PUT, ...) ***/
   let SEARCH = true;
   page.on('response', response => {
-    // console.log(response.status(), response.url(), response.statusText());
-
     requestResponseObj.response = response;
 
     // DEBUG
-    // console.log('request::', requestResponseObj.request.url());
-    // console.log('response::', requestResponseObj.response.url(), requestResponseObj.response.status(), requestResponseObj.response.headers());
-    // console.log();
+    if (DEBUG) {
+      console.log('\nrequest::', requestResponseObj.request.url());
+      console.log('response::', requestResponseObj.response.url(), requestResponseObj.response.status(), requestResponseObj.response.statusText(), requestResponseObj.response.headers());
+      console.log();
+    }
 
 
     // format answer on first 200 response
