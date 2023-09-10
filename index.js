@@ -1,6 +1,6 @@
-const httpClientPptr = require('./httpClientPptr.js');
+const HttpClientPptr = require('./HttpClientPptr.js');
 
 
 module.exports = {
-  httpClientPptr
+  HttpClientPptr
 };

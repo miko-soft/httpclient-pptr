@@ -19,9 +19,7 @@
     "type": "git",
     "url": "git@github.com:miko-soft/httpclient-pptr.git"
   },
-  "dependencies": {
-    "puppeteer-core": "^19.8.3"
-  },
+  "dependencies": {},
   "publishConfig": {
     "access": "public"
   }
