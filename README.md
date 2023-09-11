@@ -76,7 +76,7 @@ printAnswer().catch(console.log);
 #### constructor(opts)
 
 #### injectPuppeteer(puppeteer)
-Inject puppeteer-core.
+Inject puppeteer-core. Check compatibility with installed chrome [https://pptr.dev/chromium-support](https://pptr.dev/chromium-support) .
 
 #### defineExecutablePath(executablePath = '')
 define executable path to chrome or chrome based browser, for example in Ubunut it's: *'/usr/bin/google-chrome'*

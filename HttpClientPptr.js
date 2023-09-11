@@ -46,6 +46,10 @@ class HttpClientPptr {
   }
 
 
+  /**
+   * Inject puppeteer. Check version compatibility with installed chrome: https://pptr.dev/chromium-support
+   * @param {Puppeteer} puppeteer - puppeteer-core (https://www.npmjs.com/package/puppeteer-core)
+   */
   injectPuppeteer(puppeteer) {
     this.puppeteer = puppeteer;
   }
