@@ -21,7 +21,6 @@ $ npm install --save @mikosoft/httpclient-pptr
 
 ## Options
    * **headless** :any - false => show browser window
-   *  **deviceName** :string - the device name - 'Desktop Windows', 'Desktop Linux', 'Desktop Macintosh' or from https://pptr.dev/api/puppeteer.knowndevices
    *  **windowPosition** :[number, number] - the browser window offset position in pixels [x, y], for example [700, 20]
    *  **timeout** :number - the HTTP request timeout in ms
    *  referer :string - the referer URL, for example: 'https://www.dex8.com'
@@ -44,7 +43,6 @@ const { HttpClientPptr } = require('../index.js');
 const printAnswer = async () => {
   const opts = {
     headless: false,
-    deviceName: 'Desktop Linux',
     windowPosition: [700, 20],
     timeout: 21000,
     referer: '',
@@ -60,7 +58,7 @@ const printAnswer = async () => {
   const hcp = new HttpClientPptr(opts);
   hcp.injectPuppeteer(puppeteer);
   hcp.defineExecutablePath(); // '/usr/bin/google-chrome'
-  hcp.setDeviceObject('Desktop Linux');
+  hcp.setDeviceObject('Desktop Linux'); // 'Desktop Windows', 'Desktop Linux', 'Desktop Macintosh' or from https://pptr.dev/api/puppeteer.knowndevices
 
   const answer = await hcp.ask('https://www.dex8.com');
 
@@ -84,7 +82,7 @@ define executable path to chrome or chrome based browser, for example in Ubunut 
 #### setDeviceObject(deviceName = 'Desktop Windows', myDevices = [])
 Set device object.
 - *deviceName*:string - the device name - 'Desktop Windows', 'Desktop Linux', 'Desktop Macintosh' or from https://pptr.dev/api/puppeteer.knowndevices
-- *myDevices*:object[] - a list of custom defined device objects
+- *myDevices*:object[] - a list of custom defined device objects {name, userAgent, viewport: {width, height, deviceScaleFactor, isMobile, hasTouch, isLandscape}}
 
 
 #### *async* ask(url)

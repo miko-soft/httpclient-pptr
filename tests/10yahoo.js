@@ -4,7 +4,6 @@ const { HttpClientPptr } = require('../index.js');
 const printAnswer = async () => {
   const opts = {
     headless: false,
-    deviceName: 'Desktop Windows',
     windowPosition: [700, 20],
     timeout: 21000,
     referer: '',

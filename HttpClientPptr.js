@@ -9,7 +9,6 @@ class HttpClientPptr {
    * @param {object} opts - options
    * {
    *  headless :any - false => show browser window
-   *  deviceName :string - the device name - 'Desktop Windows', 'Desktop Linux', 'Desktop Macintosh' or from https://pptr.dev/api/puppeteer.knowndevices
    *  windowPosition :[number, number] - the browser window offset position in pixels [x, y], for example [700, 20]
    *  timeout :number - the HTTP request timeout in ms
    *  referer :string - the referer URL, for example: 'https://www.dex8.com'
@@ -29,7 +28,6 @@ class HttpClientPptr {
     } else {
       this.opts = {
         headless: 'new',
-        deviceName: 'Desktop Windows',
         windowPosition: [0, 0],
         timeout: 21000,
         referer: '',
