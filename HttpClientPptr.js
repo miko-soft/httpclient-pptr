@@ -186,34 +186,44 @@ class HttpClientPptr {
     // const page = await browser.newPage(); // open new tab
 
 
-    let requestResponseArr = []; // [{request, response}]
-
-
-    /*** 3. block resources ***/
+    /*** 3. block resources - images, css, js, etc ***/
     await page.setRequestInterception(true); // enable abort() and continue() methods -- https://pptr.dev/api/puppeteer.page.setrequestinterception
+
+
+    /*** 4.A catch first "document" request */
+    let firstDocumentRequest;
     page.on('request', request => {
       /* add extra headers */
       const headers = { ...request.headers(), ...this.opts.extraHeaders };
 
       /* block resources: images, js, css, ... */
-      const rt = request.resourceType(); // resource type
+      const rt = request.resourceType(); // resource type: document, font, script, image
       const block_tf = this.opts.block.indexOf(rt) !== -1;
-      this.opts.debug && console.log('on request::', rt, block_tf, request.method(), request.url());
-
       if (block_tf) { request.abort(); }
       else { request.continue({ headers }); }
 
-      /* set answer props */
-      requestResponseArr.push({ request });
+      /* define answer.req and push document request in the requestResponseArr */
+      if (rt === 'document') {
+        if (!firstDocumentRequest) {
+          firstDocumentRequest = request;
+
+          answer.redirectedURL = firstDocumentRequest.url();
+          answer.requestMethod = firstDocumentRequest.method();
+          answer.req.headers = firstDocumentRequest.headers();
+          if (!!this.opts.referer) { answer.req.headers.referer = this.opts.referer; }
+          answer.req.payload = firstDocumentRequest.postData();
+        }
+
+        this.opts.debug && console.log('on request::', rt, block_tf, request.method(), request.url());
+      }
+
     });
 
 
-    /*** 4. format answer on first 200 response ***/
+    /* 4.B catch response for the first document request */
+    let firstDocumentResponse;
     page.on('response', response => {
-      requestResponseArr = requestResponseArr.map(obj => {
-        if (!!obj && obj.request.url() === response.url()) { obj.response = response; }
-        return obj;
-      });
+      if (firstDocumentRequest.url() === response.url()) { firstDocumentResponse = response; }
     });
 
 
@@ -225,6 +235,7 @@ class HttpClientPptr {
     const width = this.device.viewport.width;
     const height = this.device.viewport.height;
     await page.setViewport({ width, height });
+
 
 
     /*** 6. open URL ***/
@@ -278,49 +289,32 @@ class HttpClientPptr {
     }, this.opts.scroll);
 
 
-
-    /*** 9. close opened browser ***/
-    this.opts.closeBrowser && await browser.close();
-
-
-    /*** 10. debug AND define answer fields ***/
-    // DEBUG
-    if (this.opts.debug) {
-      for (const requestResponseObj of requestResponseArr) { // requestResponseObj:: {request, response}
-        console.log();
-        console.log('request::', requestResponseObj.request.url());
-        requestResponseObj.response && console.log('response::', requestResponseObj.response.url(), requestResponseObj.response.status(), requestResponseObj.response.statusText(), requestResponseObj.response.headers());
-        !requestResponseObj.response && console.log('response::');
-        console.log();
-      }
-    }
-    // define answer fields
-    for (const requestResponseObj of requestResponseArr) { // requestResponseObj:: {request, response}
-      const contentType = requestResponseObj.response.headers() ? requestResponseObj.response.headers()['content-type'] : '';
-      if (requestResponseObj.response.status() === 200 && contentType.includes('text/html')) {
-        answer.redirectedURL = requestResponseObj.request.url();
-        answer.requestMethod = requestResponseObj.request.method();
-        answer.req.headers = requestResponseObj.request.headers();
-        answer.req.payload = requestResponseObj.request.postData();
-
-        answer.status = requestResponseObj.response.status();
-        answer.statusMessage = requestResponseObj.response.statusText();
-        answer.res.headers = requestResponseObj.response.headers();
-
-        break;
-      }
-    }
-
-
-
-    /*** 11. define other answer fields ***/
+    /*** 9. define other answer fields ***/
+    answer.status = firstDocumentResponse.status();
+    answer.statusMessage = firstDocumentResponse.statusText();
+    answer.res.headers = firstDocumentResponse.headers();
     answer.gzip = !!answer.res.headers['content-encoding'] ? /gzip/.test(answer.res.headers['content-encoding']) : false;
     answer.deflate = !!answer.res.headers['content-encoding'] ? /deflate/.test(answer.res.headers['content-encoding']) : false;
     answer.https = /^https/.test(answer.requestURL);
     if (/^3\d{2}/.test(answer.status)) { answer.redirectedURL = page.url(); }
-    if (!!this.opts.referer) { answer.req.headers.referer = this.opts.referer; }
     answer.time.res = this._getTime();
     answer.time.duration = this._getTimeDiff(answer.time.req, answer.time.res); // duration in seconds
+
+
+    /*** 10. close opened browser ***/
+    this.opts.closeBrowser && await browser.close();
+
+
+    // DEBUG
+    if (this.opts.debug) {
+      console.log();
+      console.log('request::', firstDocumentRequest.url(), firstDocumentRequest.headers());
+      firstDocumentResponse && console.log('response::', firstDocumentResponse.url(), firstDocumentResponse.status(), firstDocumentResponse.statusText(), firstDocumentResponse.headers());
+      !firstDocumentResponse && console.log('response::');
+      console.log();
+    }
+
+
 
 
     return answer;
@@ -356,8 +350,8 @@ class HttpClientPptr {
 
   /*** PRIVATE ***/
   /**
- * Get current date/time
- */
+  * Get current date/time
+  */
   _getTime() {
     const d = new Date();
     return d.toISOString();
