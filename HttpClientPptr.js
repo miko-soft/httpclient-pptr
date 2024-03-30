@@ -207,7 +207,6 @@ class HttpClientPptr {
         if (!firstDocumentRequest) {
           firstDocumentRequest = request;
 
-          answer.redirectedURL = firstDocumentRequest.url();
           answer.requestMethod = firstDocumentRequest.method();
           answer.req.headers = firstDocumentRequest.headers();
           if (!!this.opts.referer) { answer.req.headers.referer = this.opts.referer; }
