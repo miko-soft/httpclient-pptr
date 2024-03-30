@@ -202,20 +202,17 @@ class HttpClientPptr {
       if (block_tf) { request.abort(); }
       else { request.continue({ headers }); }
 
-      /* define answer.req and push document request in the requestResponseArr */
-      if (rt === 'document') {
-        if (!firstDocumentRequest) {
-          firstDocumentRequest = request;
+      /* catch first HTML document request (ignore css, js, font and other requests) */
+      if (!firstDocumentRequest && rt === 'document') {
+        firstDocumentRequest = request;
 
-          answer.requestMethod = firstDocumentRequest.method();
-          answer.req.headers = firstDocumentRequest.headers();
-          if (!!this.opts.referer) { answer.req.headers.referer = this.opts.referer; }
-          answer.req.payload = firstDocumentRequest.postData();
-        }
+        answer.requestMethod = firstDocumentRequest.method();
+        answer.req.headers = firstDocumentRequest.headers();
+        if (!!this.opts.referer) { answer.req.headers.referer = this.opts.referer; }
+        answer.req.payload = firstDocumentRequest.postData();
 
         this.opts.debug && console.log('on request::', rt, block_tf, request.method(), request.url());
       }
-
     });
 
 
@@ -237,32 +234,30 @@ class HttpClientPptr {
 
 
 
-    /*** 6. open URL ***/
-    // get last response -- page.on('response', ...) catch all responses e.g. from all resources and redirects
-    // referer = 'http://referer-test-chrome.net'; // uncomment to test referer
-    let requestErrorMsg;
+    /*** 6. open URL and catch response with page.on('response', ...) ***/
     const gotoOpts = {
       waitUntil: this.opts.waitUntil,
       timeout: this.opts.timeout,
       referer: this.opts.referer
     };
-    await page.goto(url, gotoOpts).catch(err => {
-      requestErrorMsg = err.message;
-      this.opts.closeBrowser && browser.close();
-      console.log('Browser is closed due to error in page.goto():', err.message);
-    });
-
-    // if no response do not execute further code
-    if (requestErrorMsg) {
+    try {
+      await page.goto(url, gotoOpts);
+    } catch (err) {
       answer.status = 400;
-      answer.statusMessage = requestErrorMsg;
+      answer.statusMessage = `The pptr page.goto() error: ${err.message}`;
+    }
+
+    // block bad URLs -- ERR_NAME_NOT_RESOLVED
+    if (answer.status === 400) {
+      this.opts.closeBrowser && await browser.close();
       return answer;
     }
 
 
+
     /*** 7. close popups ***/
     for (const cssSelector of this.opts.closePopups) {
-      const click_EH = await page.waitForSelector(cssSelector, { timeout: this.opts.timeout }).catch(err => console.log(err.message));
+      const click_EH = await page.waitForSelector(cssSelector, { timeout: this.opts.timeout }).catch(err => { answer.statusMessage = `The pptr page.waitForSelector() error: ${err.message}`; });
       if (!!click_EH) {
         await click_EH.click();
         await new Promise(r => setTimeout(r, 800));
@@ -270,7 +265,8 @@ class HttpClientPptr {
     }
 
 
-    /*** 8. scroll to the bottom and extract HTML ***/
+    /*** 8. scroll to the bottom and extract HTML
+      NOTICE: The page.evaluate() will give error "Execution context was destroyed, most likely because of a navigation." when <meta http-equiv="REFRESH" content="0;url=..."> is on the page ***/
     answer.res.content = await page.evaluate(async (scroll) => {
       if (scroll) {
         // scroll to the page bottom
@@ -284,13 +280,13 @@ class HttpClientPptr {
         await new Promise(resolve => setTimeout(resolve, 3000)); // small delay because of scroll
       }
 
-      return document.documentElement.outerHTML;
-    }, this.opts.scroll);
+      return document?.documentElement?.outerHTML || '';
+    }, this.opts.scroll).catch(err => { answer.statusMessage = `The pptr page.evaluate() error: ${err.message} Check if ${url} has META HTTP-EQUIV="refresh" tag.`; }) || '';
 
 
     /*** 9. define other answer fields ***/
     answer.status = firstDocumentResponse.status();
-    answer.statusMessage = firstDocumentResponse.statusText();
+    answer.statusMessage = answer.statusMessage || firstDocumentResponse.statusText();
     answer.res.headers = firstDocumentResponse.headers();
     answer.gzip = !!answer.res.headers['content-encoding'] ? /gzip/.test(answer.res.headers['content-encoding']) : false;
     answer.deflate = !!answer.res.headers['content-encoding'] ? /deflate/.test(answer.res.headers['content-encoding']) : false;
@@ -312,8 +308,6 @@ class HttpClientPptr {
       !firstDocumentResponse && console.log('response::');
       console.log();
     }
-
-
 
 
     return answer;
