@@ -23,10 +23,11 @@ $ npm install --save @mikosoft/httpclient-pptr
    * **headless** :any - false => show browser window
    *  **windowPosition** :[number, number] - the browser window offset position in pixels [x, y], for example [700, 20]
    *  **timeout** :number - the HTTP request timeout in ms
-   *  referer :string - the referer URL, for example: 'https://www.dex8.com'
-   *  **block**: :string[] - what resuources to block during the request, for example: ['image', 'stylesheet', 'font', 'script']
+   *  *referer* :string - the referer URL, for example: 'https://www.dex8.com'
+   *  **block**: :string[] - what resuources to block during the request, for example: ['image', 'media', 'stylesheet', 'font', 'script']
    *  **scroll** :boolean - scroll the content to the page end
    *  **waitUntil** :string - don't send response until 'load' | 'domcontentloaded' | 'networkidle0' | 'networkidle2'
+   *  **waitCSSselector** :string - send response when CSS selector is found or send timeout error
    *  **argsAppend** :string[] - array of chrome arguments -- https://peter.sh/experiments/chromium-command-line-switches/
    *  *extraHeaders* :object - additional HTTP request headers - {authorization: 'JWT ...'}
    *  **closeBrowser** :boolean - close browser after answer or page.goto error
@@ -38,7 +39,7 @@ $ npm install --save @mikosoft/httpclient-pptr
 ## Example
 ```js
 const puppeteer = require('puppeteer-core');
-const { HttpClientPptr } = require('../index.js');
+const { HttpClientPptr } = require('@mikosoft/httpclient-pptr');
 
 const printAnswer = async () => {
   const opts = {
@@ -46,9 +47,10 @@ const printAnswer = async () => {
     windowPosition: [700, 20],
     timeout: 21000,
     referer: '',
-    block: ['image'],
+    block: ['image', 'media'],
     scroll: false,
     waitUntil: 'networkidle2',
+    waitCSSselector: 'h1',
     argsAppend: [],
     extraHeaders: {},
     closeBrowser: true,
@@ -60,7 +62,7 @@ const printAnswer = async () => {
   hcp.defineExecutablePath(); // '/usr/bin/google-chrome'
   hcp.setDeviceObject('Desktop Linux'); // 'Desktop Windows', 'Desktop Linux', 'Desktop Macintosh' or from https://pptr.dev/api/puppeteer.knowndevices
 
-  const answer = await hcp.ask('https://www.dex8.com');
+  const answer = await hcp.askOnce('https://www.dex8.com');
 
   console.log('ANSWER::');
   hcp.print(answer);

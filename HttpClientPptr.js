@@ -34,6 +34,7 @@ class HttpClientPptr {
         block: [],
         scroll: false,
         waitUntil: 'load',
+        waitCSSselector: '',
         argsAppend: [],
         extraHeaders: {},
         closeBrowser: true,
@@ -128,7 +129,7 @@ class HttpClientPptr {
    * @param {string} url - requested URL
    * @returns {object} - answer
    */
-  async ask(url) {
+  async askOnce(url) {
     /*** 1. form answer similar to @mikosoft/httpclient-nodejs */
     const answer = {
       requestURL: url,
@@ -254,10 +255,13 @@ class HttpClientPptr {
     }
 
 
+    /*** 7. wait for CSS selector ***/
+    await page.waitForSelector(this.opts.waitCSSselector, { timeout: this.opts.timeout }).catch(err => { answer.status = 408; answer.statusMessage = `The pptr page.waitForSelector() error: ${err.message}`; });
 
-    /*** 7. close popups ***/
+
+    /*** 8. close popups ***/
     for (const cssSelector of this.opts.closePopups) {
-      const click_EH = await page.waitForSelector(cssSelector, { timeout: this.opts.timeout }).catch(err => { answer.statusMessage = `The pptr page.waitForSelector() error: ${err.message}`; });
+      const click_EH = await page.waitForSelector(cssSelector, { timeout: this.opts.timeout }).catch(err => { answer.status = 408; answer.statusMessage = `The pptr page.waitForSelector() error: ${err.message}`; });
       if (!!click_EH) {
         await click_EH.click();
         await new Promise(r => setTimeout(r, 800));
@@ -265,7 +269,7 @@ class HttpClientPptr {
     }
 
 
-    /*** 8. scroll to the bottom and extract HTML
+    /*** 9. scroll to the bottom and extract HTML
       NOTICE: The page.evaluate() will give error "Execution context was destroyed, most likely because of a navigation." when <meta http-equiv="REFRESH" content="0;url=..."> is on the page ***/
     answer.res.content = await page.evaluate(async (scroll) => {
       if (scroll) {
@@ -281,11 +285,11 @@ class HttpClientPptr {
       }
 
       return document?.documentElement?.outerHTML || '';
-    }, this.opts.scroll).catch(err => { answer.statusMessage = `The pptr page.evaluate() error: ${err.message} Check if ${url} has META HTTP-EQUIV="refresh" tag.`; }) || '';
+    }, this.opts.scroll).catch(err => { answer.status = 400; answer.statusMessage = `The pptr page.evaluate() error: ${err.message} Check if ${url} has META HTTP-EQUIV="refresh" tag.`; }) || '';
 
 
-    /*** 9. define other answer fields ***/
-    answer.status = firstDocumentResponse.status();
+    /*** 10. define other answer fields ***/
+    answer.status = answer.status || firstDocumentResponse.status();
     answer.statusMessage = answer.statusMessage || firstDocumentResponse.statusText();
     answer.res.headers = firstDocumentResponse.headers();
     answer.gzip = !!answer.res.headers['content-encoding'] ? /gzip/.test(answer.res.headers['content-encoding']) : false;
@@ -296,7 +300,7 @@ class HttpClientPptr {
     answer.time.duration = this._getTimeDiff(answer.time.req, answer.time.res); // duration in seconds
 
 
-    /*** 10. close opened browser ***/
+    /*** 11. close opened browser ***/
     this.opts.closeBrowser && await browser.close();
 
 
