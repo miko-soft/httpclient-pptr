@@ -8,7 +8,7 @@ class HttpClientPptr {
   /**
    * @param {object} opts - options
    * {
-   *  headless :any - false => show browser window
+   *  headless :any - 'new', 'old', true
    *  windowPosition :[number, number] - the browser window offset position in pixels [x, y], for example [700, 20]
    *  timeout :number - the HTTP request timeout in ms
    *  referer :string - the referer URL, for example: 'https://www.dex8.com'
@@ -256,12 +256,13 @@ class HttpClientPptr {
 
 
     /*** 7. wait for CSS selector ***/
-    await page.waitForSelector(this.opts.waitCSSselector, { timeout: this.opts.timeout }).catch(err => { answer.status = 408; answer.statusMessage = `The pptr page.waitForSelector() error: ${err.message}`; });
+    !!this.opts.waitCSSselector && await page.waitForSelector(this.opts.waitCSSselector, { timeout: this.opts.timeout }).catch(err => { answer.status = 408; answer.statusMessage = `The pptr page.waitForSelector() waitCSSselector error: ${err.message}`; });
 
 
     /*** 8. close popups ***/
     for (const cssSelector of this.opts.closePopups) {
-      const click_EH = await page.waitForSelector(cssSelector, { timeout: this.opts.timeout }).catch(err => { answer.status = 408; answer.statusMessage = `The pptr page.waitForSelector() error: ${err.message}`; });
+      console.log('cssSelector::', cssSelector);
+      const click_EH = await page.waitForSelector(cssSelector, { timeout: this.opts.timeout }).catch(err => { answer.status = 408; answer.statusMessage = `The pptr page.waitForSelector() closePopups error: ${err.message}`; });
       if (!!click_EH) {
         await click_EH.click();
         await new Promise(r => setTimeout(r, 800));
