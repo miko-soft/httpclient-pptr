@@ -5,43 +5,34 @@ const util = require('util');
  * Use chrome+puppeteer to extract HTML from a web page.
  */
 class HttpClientPptr {
-  /**
-   * @param {object} opts - options
-   * {
-   *  headless :any - 'new', 'old', true
-   *  windowPosition :[number, number] - the browser window offset position in pixels [x, y], for example [700, 20]
-   *  timeout :number - the HTTP request timeout in ms
-   *  referer :string - the referer URL, for example: 'https://www.dex8.com'
-   *  block: :string[] - what resuources to block during the request, for example: ['image', 'stylesheet', 'font', 'script']
-   *  scroll :boolean - scroll the content to the page end
-   *  waitUntil :string - don't send response until 'load' | 'domcontentloaded' | 'networkidle0' | 'networkidle2'
-   *  argsAppend :string[] - array of chrome arguments -- https://peter.sh/experiments/chromium-command-line-switches/
-   *  extraHeaders :object - additional HTTP request headers - {authorization: 'JWT ...'}
-   *  closeBrowser :boolean - close browser after answer or page.goto error
-   *  closePopups :string[] - CSS selectors to click to close popups
-   *  debug :boolean
-   * }
-   */
+
   constructor(opts) {
-    if (!!opts) {
-      this.opts = opts;
-    } else {
-      this.opts = {
-        headless: 'new',
-        windowPosition: [0, 0],
-        timeout: 21000,
-        referer: '',
-        block: [],
-        scroll: false,
-        waitUntil: 'load',
-        waitCSSselector: '',
-        argsAppend: [],
-        extraHeaders: {},
-        closeBrowser: true,
-        closePopups: [],
-        debug: false
-      };
-    }
+    this.opts = opts ?? {
+      puppeteerLaunchOptions: {
+        executablePath: '',
+        headless: 'new', // new, old, false
+        devtools: false,  // open Chrome devtools
+        dumpio: false, // If true, pipes the browser process stdout and stderr to process.stdout and process.stderr
+        slowMo: 13,
+        args: [
+          '--start-maximized', // full window width and height
+        ],
+        ignoreDefaultArgs: [
+          '--enable-automation' // remove "Chrome is being controlled by automated test software"
+        ],
+        defaultViewport: null, // override default viewport size {width: 800, height: 600} - https://pptr.dev/api/puppeteer.browserconnectoptions/#defaultviewport
+      },
+      device: null, // {name, userAgent, viewport}
+      cookies: null, // [{name, value, domain, path, expires, httpOnly, secure}, ...]
+      evaluateOnNewDocument_callback: null,
+      extraHeaders: {}, // additional HTTP request headers - {authorization: 'JWT ...'}
+      blockResources: [], // resuources to block during the request, for example: ['image', 'stylesheet', 'font', 'script']
+      gotoOpts: {}, // used in page.goto(url, opts) - {referer:string, timeout:number, waitUntil:'load'|'domcontentloaded'|'networkidle0'|'networkidle2'} - https://pptr.dev/api/puppeteer.gotooptions
+      closeBrowser: true, // close browser after answer is received or on page.goto error
+      waitCSSselector: '',
+      postGoto: null, // function which will be executed after page.goto(), scroll, click on popup, etc. for example: postGoto: page => {page.evaluate(...);}
+      debug: false
+    };
   }
 
 
@@ -54,98 +45,109 @@ class HttpClientPptr {
   }
 
 
-
   /**
-   * Define chrome executable path
-   * @param {string} executablePath - for example: '/usr/bin/google-chrome'
+   * Define the Chrome executable path to ensure compatibility across all platforms.
+   * @param {object} pathsObj - {linux: '/usr/bin/google-chrome', win32: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', darwin: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'}
    */
-  defineExecutablePath(executablePath = '') {
+  set_executablePath(pathsObj) {
+    if (pathsObj) { pathsObj = { linux: '/usr/bin/google-chrome', win32: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', darwin: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' }; }
     const osPlatform = os.platform(); // possible values are: 'darwin', 'freebsd', 'linux', 'sunos' or 'win32'
-    if (!executablePath && /^linux/i.test(osPlatform)) {
-      executablePath = '/usr/bin/google-chrome'; // use google chrome instead of chromium
-    } else if (!executablePath && /^win/i.test(osPlatform)) {
-      executablePath = '';
-    }
-    this.executablePath = executablePath;
+    this.opts.puppeteerLaunchOptions.executablePath = pathsObj[osPlatform];
   }
 
 
   /**
-   * Set device object.
-   * @param {string} deviceName - selected device name - 'Desktop Windows', 'Desktop Linux', 'Desktop Macintosh' or from https://pptr.dev/api/puppeteer.knowndevices
-   * @param {object[]} myDevices - array of custom defined devices
-   * @returns {void}
+   * Set the window size and position. If either width or height is given a false value, the window will be set to full size.
+   * @param {number} width - in pixels
+   * @param {number} height - in pixels
+   * @param {number} x - in pixels
+   * @param {number} y - in pixels
    */
-  setDeviceObject(deviceName = 'Desktop Windows', myDevices = []) {
-    if (!myDevices.length) {
-      myDevices = {
-        'Desktop Linux': {
-          name: 'Desktop Linux',
-          userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.122 Safari/537.36',
-          viewport: {
-            width: 1300,
-            height: 900,
-            deviceScaleFactor: 1,
-            isMobile: false,
-            hasTouch: false,
-            isLandscape: false
-
-          }
-        },
-        'Desktop Windows': {
-          name: 'Desktop Windows',
-          userAgent: 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.75 Safari/537.36',
-          viewport: {
-            width: 1300,
-            height: 900,
-            deviceScaleFactor: 0.5,
-            isMobile: false,
-            hasTouch: false,
-            isLandscape: true
-          }
-        },
-        'Desktop Macintosh': {
-          name: 'Desktop Macintosh',
-          userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36',
-          viewport: {
-            width: 1300,
-            height: 900,
-            deviceScaleFactor: 0.5,
-            isMobile: false,
-            hasTouch: false,
-            isLandscape: true
-          }
-        }
-      };
-    } // \if
-    const pup_devices = this.puppeteer.KnownDevices; // https://pptr.dev/api/puppeteer.knowndevices
-    const devices = { ...pup_devices, ...myDevices };
-    this.device = devices[deviceName];
+  set_window(width, height, x, y) {
+    let args_win = [];
+    if (!width || !height) { // full size
+      args_win = [
+        '--start-maximized'
+      ];
+      this.opts.puppeteerLaunchOptions.defaultViewport = null;
+    } else {
+      args_win = [
+        `--window-size=${width},${height}`,
+        `--window-position=${x},${y}`
+      ];
+    }
+    this.opts.puppeteerLaunchOptions.args = [...new Set(this.opts.puppeteerLaunchOptions.args.concat(args_win))];
   }
 
 
   /**
-   *
+   * Set device user-agent & viewport from puppeteer.KnownDevices or some custom defined object:
+  {
+    name: 'Desktop Linux',
+    userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.122 Safari/537.36',
+    viewport: {
+      width: 1300,
+      height: 900,
+      deviceScaleFactor: 1,
+      isMobile: false,
+      hasTouch: false,
+      isLandscape: false
+    }
+  }
+   * @param {string|object} dev - device name from KnownDevices or inject custom defined device
+   */
+  set_device(dev) {
+    if (typeof dev === 'string') {
+      const knownDevices = this.puppeteer.KnownDevices; // https://pptr.dev/api/puppeteer.knowndevices
+      this.opts.device = knownDevices[dev];
+    } else if (typeof dev === 'object' && dev?.userAgent && dev?.viewport) {
+      this.opts.device = dev;
+    } else {
+      this.opts.device = null;
+    }
+  }
+
+
+  /**
+   * Define a cookie array of objects that will be loaded before the page opens.
+   * @param {object[]} cookieArr - [{name, value, domain, path, expires, httpOnly, secure}, ...]
+   */
+  set_cookies(cookieArr) {
+    this.opts.cookies = cookieArr;
+  }
+
+
+  /**
+   * Define callback function that will be executed within page.evaluateOnNewDocument().
+   * It's useful to set navigator.webdriver to false:
+    await page.evaluateOnNewDocument(() => {
+      Object.defineProperty(navigator, 'webdriver', {
+        get: () => false,
+      });
+    });
+   * @param {Function} func
+   */
+  set_evaluateOnNewDocument_callback(func) {
+    this.opts.evaluateOnNewDocument_callback = func;
+  }
+
+
+  /**
+   * Send HTTP request
    * @param {string} url - requested URL
    * @returns {object} - answer
    */
   async askOnce(url) {
-    /*** 1. form answer similar to @mikosoft/httpclient-nodejs */
+    /*** 1. answer prototype (similar as @mikosoft/httpclient-nodejs) ***/
     const answer = {
       requestURL: url,
-      redirectedURL: undefined,
-      requestMethod: undefined,
+      requestMethod: 'GET',
       status: 0,
       statusMessage: '',
-      // httpVersion: undefined,
-      gzip: undefined,
-      deflate: undefined,
+      decompressed: false,
       https: undefined,
-      // remoteAddress: // TODO
-      // referrerPolicy: // TODO
       req: {
-        headers: undefined,
-        payload: undefined
+        headers: undefined
       },
       res: {
         headers: undefined,
@@ -159,30 +161,8 @@ class HttpClientPptr {
     };
 
 
-    /*** 2. open browser */
-    const browserWidth = this.device.viewport.width + 20;
-    const browserHeight = this.device.viewport.height + 150;
-
-    const args = [
-      `--ash-host-window-bounds=${browserWidth}x${browserHeight}`,
-      `--window-size=${browserWidth},${browserHeight}`,
-      `--window-position=${this.opts.windowPosition[0]},${this.opts.windowPosition[1]}`
-    ].concat(this.opts.argsAppend);
-
-    const puppeteerLaunchOptions = {
-      executablePath: this.executablePath,
-      headless: this.opts.headless,
-      devtools: false,  // Open Chrome devtools at the beginning of the test
-      dumpio: false,
-      slowMo: 13,  // Wait 13 ms each step of execution, for example chars typing
-      args
-    };
-
-    let browser = '';
-    setTimeout(() => {
-      if (!browser) { throw new Error(`The puppeteer didn't launch the browser with ${JSON.stringify(puppeteerLaunchOptions)}. Check compatibility between puppeteer-core and browser: https://www.npmjs.com/package/puppeteer-core?activeTab=versions`); }
-    }, this.opts.timeout);
-    browser = await this.puppeteer.launch(puppeteerLaunchOptions).catch(console.log);
+    /*** 2. open browser and tab ***/
+    const browser = await this.puppeteer.launch(this.opts.puppeteerLaunchOptions).catch(console.log);
     const [page] = await browser.pages(); // open in first tab
     // const page = await browser.newPage(); // open new tab
 
@@ -191,7 +171,7 @@ class HttpClientPptr {
     await page.setRequestInterception(true); // enable abort() and continue() methods -- https://pptr.dev/api/puppeteer.page.setrequestinterception
 
 
-    /*** 4.A catch first "document" request */
+    /*** 4.A catch first "document" request ***/
     let firstDocumentRequest;
     page.on('request', request => {
       /* add extra headers */
@@ -199,20 +179,14 @@ class HttpClientPptr {
 
       /* block resources: images, js, css, ... */
       const rt = request.resourceType(); // resource type: document, font, script, image
-      const block_tf = this.opts.block.indexOf(rt) !== -1;
-      if (block_tf) { request.abort(); }
-      else { request.continue({ headers }); }
+      const block_tf = this.opts.blockResources.includes(rt);
+      block_tf ? request.abort() : request.continue({ headers });
+      this.opts.debug && console.log('on request::', `blocked:${block_tf}`, rt, request.method(), request.url());
 
       /* catch first HTML document request (ignore css, js, font and other requests) */
       if (!firstDocumentRequest && rt === 'document') {
         firstDocumentRequest = request;
-
-        answer.requestMethod = firstDocumentRequest.method();
         answer.req.headers = firstDocumentRequest.headers();
-        if (!!this.opts.referer) { answer.req.headers.referer = this.opts.referer; }
-        answer.req.payload = firstDocumentRequest.postData();
-
-        this.opts.debug && console.log('on request::', rt, block_tf, request.method(), request.url());
       }
     });
 
@@ -225,78 +199,41 @@ class HttpClientPptr {
 
 
 
-    /*** 5. set browser settings ***/
+    /*** 5. emulate() is shortcut for setUserAgent() and setViewport() ***/
+    this.opts.device && await page.emulate(this.opts.device);
     // await page.bringToFront();
-    await page.emulate(this.device);
-
-    const width = this.device.viewport.width;
-    const height = this.device.viewport.height;
-    await page.setViewport({ width, height });
 
 
+    /*** 6. set cookies before page opens ***/
+    this.opts.cookies && await page.setCookie(...this.opts.cookies);
 
-    /*** 6. open URL and catch response with page.on('response', ...) ***/
-    const gotoOpts = {
-      waitUntil: this.opts.waitUntil,
-      timeout: this.opts.timeout,
-      referer: this.opts.referer
-    };
+
+    /*** 7. open URL and catch response with page.on('response', ...) ***/
     try {
-      await page.goto(url, gotoOpts);
+      await page.goto(url, this.opts?.gotoOpts);
     } catch (err) {
-      answer.status = 400;
+      answer.status = this._getStatus(err);
       answer.statusMessage = `The pptr page.goto() error: ${err.message}`;
-    }
-
-    // block bad URLs -- ERR_NAME_NOT_RESOLVED
-    if (answer.status === 400) {
       this.opts.closeBrowser && await browser.close();
       return answer;
     }
 
 
-    /*** 7. wait for CSS selector ***/
-    !!this.opts.waitCSSselector && await page.waitForSelector(this.opts.waitCSSselector, { timeout: this.opts.timeout }).catch(err => { answer.status = 408; answer.statusMessage = `The pptr page.waitForSelector() waitCSSselector error: ${err.message}`; });
+    /*** 8. wait for CSS selector ***/
+    !!this.opts.waitCSSselector && await page.waitForSelector(this.opts.waitCSSselector, { timeout: this.opts.timeout }).catch(err => { answer.status = this._getStatus(err); answer.statusMessage = `The pptr page.waitForSelector() waitCSSselector error: ${err.message}`; });
 
 
-    /*** 8. close popups ***/
-    for (const cssSelector of this.opts.closePopups) {
-      console.log('cssSelector::', cssSelector);
-      const click_EH = await page.waitForSelector(cssSelector, { timeout: this.opts.timeout }).catch(err => { answer.status = 408; answer.statusMessage = `The pptr page.waitForSelector() closePopups error: ${err.message}`; });
-      if (!!click_EH) {
-        await click_EH.click();
-        await new Promise(r => setTimeout(r, 800));
-      }
-    }
-
-
-    /*** 9. scroll to the bottom and extract HTML
-      NOTICE: The page.evaluate() will give error "Execution context was destroyed, most likely because of a navigation." when <meta http-equiv="REFRESH" content="0;url=..."> is on the page ***/
-    answer.res.content = await page.evaluate(async (scroll) => {
-      if (scroll) {
-        // scroll to the page bottom
-        const scrollHeight = document.body.scrollHeight; // maximal viewport height (also document.documentElement.scrollHeight can be used)
-        const viewportHeight = window.innerHeight; // always constant regardless scrolling, changes only when browser window is resized
-        window.scrollTo({
-          top: scrollHeight - viewportHeight,
-          left: 0,
-          behavior: 'smooth'
-        });
-        await new Promise(resolve => setTimeout(resolve, 3000)); // small delay because of scroll
-      }
-
-      return document?.documentElement?.outerHTML || '';
-    }, this.opts.scroll).catch(err => { answer.status = 400; answer.statusMessage = `The pptr page.evaluate() error: ${err.message} Check if ${url} has META HTTP-EQUIV="refresh" tag.`; }) || '';
+    /*** 9. execute after the web page has loaded ***/
+    this.opts.postGoto && await this.opts.postGoto.call(this, page);
 
 
     /*** 10. define other answer fields ***/
-    answer.status = answer.status || firstDocumentResponse.status();
-    answer.statusMessage = answer.statusMessage || firstDocumentResponse.statusText();
-    answer.res.headers = firstDocumentResponse.headers();
-    answer.gzip = !!answer.res.headers['content-encoding'] ? /gzip/.test(answer.res.headers['content-encoding']) : false;
-    answer.deflate = !!answer.res.headers['content-encoding'] ? /deflate/.test(answer.res.headers['content-encoding']) : false;
+    answer.status = answer.status ?? firstDocumentResponse?.status() ?? 0;
+    answer.statusMessage = answer.statusMessage || firstDocumentResponse?.statusText() || '';
+    answer.res.headers = firstDocumentResponse?.headers() || [];
+    answer.res.content = await page.content();
     answer.https = /^https/.test(answer.requestURL);
-    if (/^3\d{2}/.test(answer.status)) { answer.redirectedURL = page.url(); }
+    answer.decompressed = answer.res.headers['content-encoding'] === 'gzip' || answer.res.headers['content-encoding'] === 'deflate';
     answer.time.res = this._getTime();
     answer.time.duration = this._getTimeDiff(answer.time.req, answer.time.res); // duration in seconds
 
@@ -308,15 +245,14 @@ class HttpClientPptr {
     // DEBUG
     if (this.opts.debug) {
       console.log();
-      console.log('request::', firstDocumentRequest.url(), firstDocumentRequest.headers());
-      firstDocumentResponse && console.log('response::', firstDocumentResponse.url(), firstDocumentResponse.status(), firstDocumentResponse.statusText(), firstDocumentResponse.headers());
-      !firstDocumentResponse && console.log('response::');
+      console.log('firstDocumentRequest::', firstDocumentRequest.url(), firstDocumentRequest.headers());
+      firstDocumentResponse && console.log('firstDocumentResponse::', firstDocumentResponse.url(), firstDocumentResponse.status(), firstDocumentResponse.statusText(), firstDocumentResponse.headers());
+      !firstDocumentResponse && console.log('firstDocumentResponse::');
       console.log();
     }
 
 
     return answer;
-
   }
 
 
@@ -365,6 +301,21 @@ class HttpClientPptr {
   }
 
 
+  _getStatus(err) {
+    let status;
+    if (err.response) {
+      status = err.response.status();
+    } else if (err.name === 'TimeoutError') {
+      status = 408; // request Timeout for waitForSelector timeout
+    } else if (err.message.includes('No node found')) {
+      status = 404; // not Found if the selector is not found
+    } else if (err.message.includes('net::ERR')) {
+      status = 503; //  Handle network errors (e.g., DNS failure, connection refused) -- Service Unavailable for network issues
+    } else {
+      status = 500; // Internal Server Error for other cases
+    }
+    return status;
+  }
 
 
 }
