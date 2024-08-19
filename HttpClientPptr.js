@@ -138,14 +138,17 @@ class HttpClientPptr {
    * @returns {object} - answer
    */
   async askOnce(url) {
+    url = this._correctUrl(url);
+
     /*** 1. answer prototype (similar as @mikosoft/httpclient-nodejs) ***/
     const answer = {
-      requestURL: url,
       requestMethod: 'GET',
+      requestURL: url,
+      finalURL: '', // final browser's URL, i.e. url after redirections
       status: 0,
       statusMessage: '',
       decompressed: false,
-      https: undefined,
+      https: null,
       req: {
         headers: undefined
       },
@@ -157,7 +160,8 @@ class HttpClientPptr {
         req: this._getTime(),
         res: undefined,
         duration: undefined
-      }
+      },
+      postGotoResult: undefined
     };
 
 
@@ -171,30 +175,47 @@ class HttpClientPptr {
     await page.setRequestInterception(true); // enable abort() and continue() methods -- https://pptr.dev/api/puppeteer.page.setrequestinterception
 
 
-    /*** 4.A catch first "document" request ***/
-    let firstDocumentRequest;
+    /*** 4.A catch requests ***/
+    const request_response_map = new Map();
     page.on('request', request => {
-      /* add extra headers */
+      // add extra headers
       const headers = { ...request.headers(), ...this.opts.extraHeaders };
 
-      /* block resources: images, js, css, ... */
+      // block resources: images, js, css, ...
       const rt = request.resourceType(); // resource type: document, font, script, image
       const block_tf = this.opts.blockResources.includes(rt);
       block_tf ? request.abort() : request.continue({ headers });
-      this.opts.debug && console.log('on request::', `blocked:${block_tf}`, rt, request.method(), request.url());
 
-      /* catch first HTML document request (ignore css, js, font and other requests) */
-      if (!firstDocumentRequest && rt === 'document') {
-        firstDocumentRequest = request;
-        answer.req.headers = firstDocumentRequest.headers();
-      }
+      // save request
+      const req_url = request.url();
+      const map_obj = { request, response: null };
+      request_response_map.set(req_url, map_obj);
+
+      // DEBUG requests
+      this.opts.debug && console.log('on request::', rt, `blocked:${block_tf}`, request.url(), request.method());
     });
 
 
-    /* 4.B catch response for the first document request */
+    /* 4.B catch responses */
+    let firstDocumentRequest;
     let firstDocumentResponse;
     page.on('response', response => {
-      if (firstDocumentRequest.url() === response.url()) { firstDocumentResponse = response; }
+      // save response
+      const resp_url = response.url();
+      const map_obj = request_response_map.get(resp_url);
+      map_obj.response = response;
+      request_response_map.set(resp_url, map_obj);
+
+      // define first document request and reponse
+      const resourceType = map_obj.request.resourceType(); // resource type: document, font, script, image
+      const status = map_obj.response.status(); // 301, 200, ...
+      if (!firstDocumentRequest && !firstDocumentResponse && resourceType === 'document' && !/3\d\d/.test(status)) {
+        firstDocumentRequest = map_obj.request;
+        firstDocumentResponse = map_obj.response;
+      }
+
+      // DEBUG responses
+      this.opts.debug && console.log('on response::', response.url(), response.status());
     });
 
 
@@ -224,16 +245,18 @@ class HttpClientPptr {
 
 
     /*** 9. execute after the web page has loaded ***/
-    this.opts.postGoto && await this.opts.postGoto.call(this, page);
+    if (this.opts.postGoto) { answer.postGotoResult = await this.opts.postGoto.call(this, page); }
 
 
     /*** 10. define other answer fields ***/
-    answer.status = answer.status ?? firstDocumentResponse?.status() ?? 0;
+    answer.finalURL = firstDocumentResponse?.url() || '';
+    answer.status = answer.status || firstDocumentResponse?.status() || 0;
     answer.statusMessage = answer.statusMessage || firstDocumentResponse?.statusText() || '';
+    answer.req.headers = firstDocumentRequest?.headers() || [];
     answer.res.headers = firstDocumentResponse?.headers() || [];
     answer.res.content = await page.content();
-    answer.https = /^https/.test(answer.requestURL);
     answer.decompressed = answer.res.headers['content-encoding'] === 'gzip' || answer.res.headers['content-encoding'] === 'deflate';
+    answer.https = /^https/.test(answer.finalURL);
     answer.time.res = this._getTime();
     answer.time.duration = this._getTimeDiff(answer.time.req, answer.time.res); // duration in seconds
 
@@ -269,8 +292,8 @@ class HttpClientPptr {
       colors: true,
       customInspect: true,
       showProxy: false,
-      maxArrayLength: 10,
-      maxStringLength: 350,
+      maxArrayLength: 100,
+      maxStringLength: 3000,
       breakLength: 80,
       compact: false,
       sorted: false,
@@ -315,6 +338,32 @@ class HttpClientPptr {
       status = 500; // Internal Server Error for other cases
     }
     return status;
+  }
+
+  /**
+   * URL corrections
+   */
+  _correctUrl(url) {
+    if (!url) { throw new Error('URL is not defined'); }
+    if (typeof url !== 'string') { throw new Error('URL is not string data type'); }
+
+    // 1. trim from left and right
+    url = url.trim();
+
+    // 2. add protocol
+    if (!/^https?:\/\//.test(url)) {
+      url = 'http://' + url;
+    }
+
+    // 3. remove multiple empty spaces and insert %20
+    if (this.opts.encodeURI) {
+      url = encodeURI(url);
+    } else {
+      url = url.replace(/\s+/g, ' ');
+      url = url.replace(/ /g, '%20');
+    }
+
+    return url;
   }
 
 

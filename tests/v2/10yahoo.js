@@ -1,5 +1,5 @@
 const puppeteer = require('puppeteer-core');
-const { HttpClientPptr } = require('../index.js');
+const { HttpClientPptr } = require('../../index.js');
 
 const printAnswer = async () => {
   const opts = {

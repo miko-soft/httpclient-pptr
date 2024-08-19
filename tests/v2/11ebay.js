@@ -1,5 +1,5 @@
 const puppeteer = require('puppeteer-core');
-const { HttpClientPptr } = require('../index.js');
+const { HttpClientPptr } = require('../../index.js');
 
 const printAnswer = async () => {
   const opts = {
@@ -7,21 +7,21 @@ const printAnswer = async () => {
     windowPosition: [700, 20],
     timeout: 21000,
     referer: '',
-    block: ['image'],
-    scroll: false,
+    block: [],
+    scroll: true,
     waitUntil: 'networkidle2',
     argsAppend: [],
     extraHeaders: {},
-    closeBrowser: true,
-    closePopups: [],
-    debug: false
+    closeBrowser: false,
+    closePopups: ['button#gdpr-banner-accept'],
+    debug: true
   };
   const hcp = new HttpClientPptr(opts);
   hcp.injectPuppeteer(puppeteer);
   hcp.defineExecutablePath(); // '/usr/bin/google-chrome'
-  hcp.setDeviceObject('Desktop Linux');
+  hcp.setDeviceObject('Desktop Windows');
 
-  const answer = await hcp.ask('https://www.dex8.com');
+  const answer = await hcp.ask('http://ebay.com');
 
   console.log('ANSWER::');
   hcp.print(answer);
