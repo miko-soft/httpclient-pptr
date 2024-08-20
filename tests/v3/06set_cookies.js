@@ -1,24 +1,22 @@
 const puppeteer = require('puppeteer-core');
 const { HttpClientPptr } = require('../../index.js');
+const cookiesArr = require('./www.dex8.com.cookies.json');
+
 
 /**
- * $ node 01custom_opts.js "https://www.dex8.com"
+ * $ node 06set_cookies.js "https://www.dex8.com"
  */
 const openURL = async (url) => {
   console.log(` ...opening "${url}"`);
 
-
   const opts = {
     puppeteerLaunchOptions: {
-      executablePath: '/usr/bin/google-chrome',
+      executablePath: '',
       headless: false, // new, old, false
       devtools: false,  // open Chrome devtools
       dumpio: false, // If true, pipes the browser process stdout and stderr to process.stdout and process.stderr
       slowMo: 13,
-      args: [
-        `--window-size=1300,1000`,
-        `--window-position=400,20`
-      ],
+      args: [],
       ignoreDefaultArgs: [
         '--enable-automation' // remove "Chrome is being controlled by automated test software"
       ],
@@ -39,6 +37,9 @@ const openURL = async (url) => {
 
 
   hcp.injectPuppeteer(puppeteer);
+  hcp.set_executablePath({ linux: '/usr/bin/google-chrome', win32: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', darwin: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' });
+  hcp.set_window(1300, 1000, 20, 50);
+  hcp.set_cookies(cookiesArr);
 
   const answer = await hcp.askOnce(url);
   hcp.print(answer);

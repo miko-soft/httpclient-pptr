@@ -2,7 +2,6 @@ const puppeteer = require('puppeteer-core');
 const { HttpClientPptr } = require('../../index.js');
 
 /**
- * Default options.
  * $ node 00default_opts.js "https://www.yahoo.com"
  */
 const openURL = async (url) => {

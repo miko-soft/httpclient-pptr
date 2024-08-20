@@ -1,0 +1,20 @@
+[
+  {
+    "name": "test1",
+    "value": "123123",
+    "domain": ".dex8.com",
+    "path": "/",
+    "expires": 1758723871.330681,
+    "httpOnly": false,
+    "secure": false
+  },
+  {
+    "name": "test2",
+    "value": "456456",
+    "domain": ".dex8.com",
+    "path": "/",
+    "expires": 1758723871.330007,
+    "httpOnly": false,
+    "secure": false
+  }
+]

@@ -2,7 +2,7 @@ const puppeteer = require('puppeteer-core');
 const { HttpClientPptr } = require('../../index.js');
 
 /**
- * $ node 01custom_opts.js "https://www.dex8.com"
+ * $ node 01custom_opts_start-maximized.js "https://www.dex8.com"
  */
 const openURL = async (url) => {
   console.log(` ...opening "${url}"`);
@@ -16,8 +16,7 @@ const openURL = async (url) => {
       dumpio: false, // If true, pipes the browser process stdout and stderr to process.stdout and process.stderr
       slowMo: 13,
       args: [
-        `--window-size=1300,1000`,
-        `--window-position=400,20`
+        '--start-maximized', // full window width and height
       ],
       ignoreDefaultArgs: [
         '--enable-automation' // remove "Chrome is being controlled by automated test software"
