@@ -25,11 +25,11 @@ class HttpClientPptr {
       device: null, // {name, userAgent, viewport}
       cookies: null, // [{name, value, domain, path, expires, httpOnly, secure}, ...]
       evaluateOnNewDocument_callback: null,
-      extraHeaders: {}, // additional HTTP request headers - {authorization: 'JWT ...'}
+      extraRequestHeaders: {}, // additional HTTP request headers - {authorization: 'JWT ...'}
       blockResources: [], // resuources to block during the request, for example: ['image', 'stylesheet', 'font', 'script']
       gotoOpts: {}, // used in page.goto(url, opts) - {referer:string, timeout:number, waitUntil:'load'|'domcontentloaded'|'networkidle0'|'networkidle2'} - https://pptr.dev/api/puppeteer.gotooptions
       closeBrowser: true, // close browser after answer is received or on page.goto error
-      waitCSSselector: '',
+      waitCSSselector: null, // {selector: 'div#article', timeout: 5000} --> default timeout is 10000ms
       postGoto: null, // function which will be executed after page.goto(), scroll, click on popup, etc. for example: postGoto: page => {page.evaluate(...);}
       debug: false
     };
@@ -99,6 +99,8 @@ class HttpClientPptr {
   set_device(dev) {
     if (typeof dev === 'string') {
       const knownDevices = this.puppeteer.KnownDevices; // https://pptr.dev/api/puppeteer.knowndevices
+      const knownDevice = knownDevices[dev];
+      if (!knownDevice) { throw new Error(`The "${dev}" is not in the list of known devices. See https://pptr.dev/api/puppeteer.knowndevices`); }
       this.opts.device = knownDevices[dev];
     } else if (typeof dev === 'object' && dev?.userAgent && dev?.viewport) {
       this.opts.device = dev;
@@ -125,10 +127,10 @@ class HttpClientPptr {
         get: () => false,
       });
     });
-   * @param {Function} func
+   * @param {Function} cb
    */
-  set_evaluateOnNewDocument_callback(func) {
-    this.opts.evaluateOnNewDocument_callback = func;
+  set_evaluateOnNewDocument(cb) {
+    this.opts.evaluateOnNewDocument_callback = cb;
   }
 
 
@@ -154,14 +156,14 @@ class HttpClientPptr {
       },
       res: {
         headers: undefined,
-        content: undefined
+        content: undefined,
+        postGotoResult: undefined
       },
       time: {
         req: this._getTime(),
         res: undefined,
         duration: undefined
       },
-      postGotoResult: undefined
     };
 
 
@@ -179,7 +181,7 @@ class HttpClientPptr {
     const request_response_map = new Map();
     page.on('request', request => {
       // add extra headers
-      const headers = { ...request.headers(), ...this.opts.extraHeaders };
+      const headers = { ...request.headers(), ...this.opts.extraRequestHeaders };
 
       // block resources: images, js, css, ...
       const rt = request.resourceType(); // resource type: document, font, script, image
@@ -197,22 +199,12 @@ class HttpClientPptr {
 
 
     /* 4.B catch responses */
-    let firstDocumentRequest;
-    let firstDocumentResponse;
     page.on('response', response => {
       // save response
       const resp_url = response.url();
       const map_obj = request_response_map.get(resp_url);
       map_obj.response = response;
       request_response_map.set(resp_url, map_obj);
-
-      // define first document request and reponse
-      const resourceType = map_obj.request.resourceType(); // resource type: document, font, script, image
-      const status = map_obj.response.status(); // 301, 200, ...
-      if (!firstDocumentRequest && !firstDocumentResponse && resourceType === 'document' && !/3\d\d/.test(status)) {
-        firstDocumentRequest = map_obj.request;
-        firstDocumentResponse = map_obj.response;
-      }
 
       // DEBUG responses
       this.opts.debug && console.log('on response::', response.url(), response.status());
@@ -225,11 +217,15 @@ class HttpClientPptr {
     // await page.bringToFront();
 
 
-    /*** 6. set cookies before page opens ***/
+    /*** 6. evaluateOnNewDocument - evaluate before page loads ***/
+    this.opts.evaluateOnNewDocument_callback && await page.evaluateOnNewDocument(this.opts.evaluateOnNewDocument_callback);
+
+
+    /*** 7. set cookies before page opens ***/
     this.opts.cookies && await page.setCookie(...this.opts.cookies);
 
 
-    /*** 7. open URL and catch response with page.on('response', ...) ***/
+    /*** 8. open URL and catch response with page.on('response', ...) ***/
     try {
       await page.goto(url, this.opts?.gotoOpts);
     } catch (err) {
@@ -240,39 +236,51 @@ class HttpClientPptr {
     }
 
 
-    /*** 8. wait for CSS selector ***/
-    !!this.opts.waitCSSselector && await page.waitForSelector(this.opts.waitCSSselector, { timeout: this.opts.timeout }).catch(err => { answer.status = this._getStatus(err); answer.statusMessage = `The pptr page.waitForSelector() waitCSSselector error: ${err.message}`; });
+    /*** 9. wait for CSS selector ***/
+    !!this.opts.waitCSSselector?.selector && await page.waitForSelector(this.opts.waitCSSselector.selector, { timeout: this.opts.waitCSSselector.selector.timeout || 10000 }).catch(err => { answer.status = this._getStatus(err); answer.statusMessage = `The pptr page.waitForSelector() waitCSSselector error: ${err.message}`; });
 
 
-    /*** 9. execute after the web page has loaded ***/
-    if (this.opts.postGoto) { answer.postGotoResult = await this.opts.postGoto.call(this, page); }
+    /*** 10. execute after the web page has loaded ***/
+    if (this.opts.postGoto) { answer.res.postGotoResult = await this.opts.postGoto.call(this, page); }
 
 
-    /*** 10. define other answer fields ***/
-    answer.finalURL = firstDocumentResponse?.url() || '';
-    answer.status = answer.status || firstDocumentResponse?.status() || 0;
-    answer.statusMessage = answer.statusMessage || firstDocumentResponse?.statusText() || '';
-    answer.req.headers = firstDocumentRequest?.headers() || [];
-    answer.res.headers = firstDocumentResponse?.headers() || [];
-    answer.res.content = await page.content();
+    /*** 11. define other answer fields */
+    // get content
+    let content = '';
+    try {
+      content = await page.content();
+    } catch (err) {
+      answer.status = this._getStatus(err);
+      answer.statusMessage = `The pptr page.content() error: ${err.message}`;
+      content = await page.content();
+    }
+
+    // retrieve the final browser URL (after all redirections)
+    const finalURL = page.url();
+
+    // get document request and response from request_response_map
+    const request_response_obj = request_response_map.get(finalURL);
+    const documentRequest = request_response_obj?.request;
+    const documentResponse = request_response_obj?.response;
+    this.opts.debug && console.log('documentRequest::', documentRequest?.url(), documentRequest?.headers());
+    this.opts.debug && console.log('documentResponse::', documentResponse?.url(), documentResponse?.status(), documentResponse?.statusText(), documentResponse?.headers());
+
+
+    /*** 12. answer fields ***/
+    answer.finalURL = finalURL;
+    answer.status = answer.status || documentResponse?.status() || 0;
+    answer.statusMessage = answer.statusMessage || documentResponse?.statusText() || '';
+    answer.req.headers = documentRequest?.headers() || [];
+    answer.res.headers = documentResponse?.headers() || [];
+    answer.res.content = content;
     answer.decompressed = answer.res.headers['content-encoding'] === 'gzip' || answer.res.headers['content-encoding'] === 'deflate';
     answer.https = /^https/.test(answer.finalURL);
     answer.time.res = this._getTime();
     answer.time.duration = this._getTimeDiff(answer.time.req, answer.time.res); // duration in seconds
 
 
-    /*** 11. close opened browser ***/
+    /*** 12. close opened browser ***/
     this.opts.closeBrowser && await browser.close();
-
-
-    // DEBUG
-    if (this.opts.debug) {
-      console.log();
-      console.log('firstDocumentRequest::', firstDocumentRequest.url(), firstDocumentRequest.headers());
-      firstDocumentResponse && console.log('firstDocumentResponse::', firstDocumentResponse.url(), firstDocumentResponse.status(), firstDocumentResponse.statusText(), firstDocumentResponse.headers());
-      !firstDocumentResponse && console.log('firstDocumentResponse::');
-      console.log();
-    }
 
 
     return answer;
