@@ -24,11 +24,12 @@ class HttpClientPptr {
       },
       device: null, // {name, userAgent, viewport}
       cookies: null, // [{name, value, domain, path, expires, httpOnly, secure}, ...]
+      storage: null, // localStorage and sessionStorage {local: {key1: val1, key2: val2, ...}, session: {key1: val1, key2: val2, ...}}
       evaluateOnNewDocument_callback: null,
       extraRequestHeaders: {}, // additional HTTP request headers - {authorization: 'JWT ...'}
       blockResources: [], // resuources to block during the request, for example: ['image', 'stylesheet', 'font', 'script']
       gotoOpts: {}, // used in page.goto(url, opts) - {referer:string, timeout:number, waitUntil:'load'|'domcontentloaded'|'networkidle0'|'networkidle2'} - https://pptr.dev/api/puppeteer.gotooptions
-      closeBrowser: true, // close browser after answer is received or on page.goto error
+      closeBrowser: true, // close the browser either after the response is received or if an error occurs during `page.goto`.
       waitCSSselector: null, // {selector: 'div#article', timeout: 5000} --> default timeout is 10000ms
       postGoto: null, // function which will be executed after page.goto(), scroll, click on popup, etc. for example: postGoto: page => {page.evaluate(...);}
       debug: false
@@ -120,6 +121,15 @@ class HttpClientPptr {
 
 
   /**
+   * Define a localStorage and sessionStorage object that will be loaded before the page opens.
+   * * @param {object[]} storageObj - {local:object, session:object}
+   */
+  set_storage(storageObj) {
+    this.opts.storage = storageObj;
+  }
+
+
+  /**
    * Define callback function that will be executed within page.evaluateOnNewDocument().
    * It's useful to set navigator.webdriver to false:
     await page.evaluateOnNewDocument(() => {
@@ -157,6 +167,7 @@ class HttpClientPptr {
       res: {
         headers: undefined,
         content: undefined,
+        cookies: undefined,
         postGotoResult: undefined
       },
       time: {
@@ -211,21 +222,39 @@ class HttpClientPptr {
     });
 
 
-
     /*** 5. emulate() is shortcut for setUserAgent() and setViewport() ***/
     this.opts.device && await page.emulate(this.opts.device);
     // await page.bringToFront();
 
 
-    /*** 6. evaluateOnNewDocument - evaluate before page loads ***/
-    this.opts.evaluateOnNewDocument_callback && await page.evaluateOnNewDocument(this.opts.evaluateOnNewDocument_callback);
-
-
-    /*** 7. set cookies before page opens ***/
+    /*** 6. set cookies before page opens ***/
     this.opts.cookies && await page.setCookie(...this.opts.cookies);
 
 
-    /*** 8. open URL and catch response with page.on('response', ...) ***/
+    /*** 7. set localStorage and sessionStorage ***/
+    this.opts.storage && await page.evaluateOnNewDocument(storageObj => {
+      if (!!storageObj.local) {
+        for (const [key, value] of Object.entries(storageObj.local)) {
+          let val = value;
+          if (val && typeof val === 'object') { val = JSON.stringify(val); }
+          localStorage.setItem(key, val);
+        }
+      }
+      if (!!storageObj.session) {
+        for (const [key, value] of Object.entries(storageObj.session)) {
+          let val = value;
+          if (val && typeof val === 'object') { val = JSON.stringify(val); }
+          sessionStorage.setItem(key, val);
+        }
+      }
+    }, this.opts.storage);
+
+
+    /*** 8. evaluateOnNewDocument - evaluate before page loads ***/
+    this.opts.evaluateOnNewDocument_callback && await page.evaluateOnNewDocument(this.opts.evaluateOnNewDocument_callback);
+
+
+    /*** 9. open URL and catch response with page.on('response', ...) ***/
     try {
       await page.goto(url, this.opts?.gotoOpts);
     } catch (err) {
@@ -236,15 +265,15 @@ class HttpClientPptr {
     }
 
 
-    /*** 9. wait for CSS selector ***/
+    /*** 10. wait for CSS selector ***/
     !!this.opts.waitCSSselector?.selector && await page.waitForSelector(this.opts.waitCSSselector.selector, { timeout: this.opts.waitCSSselector.selector.timeout || 10000 }).catch(err => { answer.status = this._getStatus(err); answer.statusMessage = `The pptr page.waitForSelector() waitCSSselector error: ${err.message}`; });
 
 
-    /*** 10. execute after the web page has loaded ***/
+    /*** 11. execute after the web page has loaded ***/
     if (this.opts.postGoto) { answer.res.postGotoResult = await this.opts.postGoto.call(this, page); }
 
 
-    /*** 11. define other answer fields */
+    /*** 12. define other answer fields */
     // get content
     let content = '';
     try {
@@ -258,6 +287,9 @@ class HttpClientPptr {
     // retrieve the final browser URL (after all redirections)
     const finalURL = page.url();
 
+    // cookies
+    const cookies = await page.cookies();
+
     // get document request and response from request_response_map
     const request_response_obj = request_response_map.get(finalURL);
     const documentRequest = request_response_obj?.request;
@@ -266,20 +298,21 @@ class HttpClientPptr {
     this.opts.debug && console.log('documentResponse::', documentResponse?.url(), documentResponse?.status(), documentResponse?.statusText(), documentResponse?.headers());
 
 
-    /*** 12. answer fields ***/
+    /*** 13. answer fields ***/
     answer.finalURL = finalURL;
     answer.status = answer.status || documentResponse?.status() || 0;
     answer.statusMessage = answer.statusMessage || documentResponse?.statusText() || '';
     answer.req.headers = documentRequest?.headers() || [];
     answer.res.headers = documentResponse?.headers() || [];
     answer.res.content = content;
+    answer.res.cookies = cookies;
     answer.decompressed = answer.res.headers['content-encoding'] === 'gzip' || answer.res.headers['content-encoding'] === 'deflate';
     answer.https = /^https/.test(answer.finalURL);
     answer.time.res = this._getTime();
     answer.time.duration = this._getTimeDiff(answer.time.req, answer.time.res); // duration in seconds
 
 
-    /*** 12. close opened browser ***/
+    /*** 14. close opened browser ***/
     this.opts.closeBrowser && await browser.close();
 
 
@@ -373,6 +406,7 @@ class HttpClientPptr {
 
     return url;
   }
+
 
 
 }
