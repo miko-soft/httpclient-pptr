@@ -3,7 +3,7 @@ const { HttpClientPptr } = require('../../index.js');
 
 
 /**
- * $ node 09blockResources.js "https://www.dex8.com"
+ * $ node 09extraRequestHeaders.js "https://www.dex8.com"
  */
 const openURL = async (url) => {
   console.log(` ...opening "${url}"`);
@@ -25,11 +25,12 @@ const openURL = async (url) => {
     },
     device: null, // {name, userAgent, viewport}
     cookies: null, // [{name, value, domain, path, expires, httpOnly, secure}, ...]
+    storage: null, // localStorage and sessionStorage {local: {key1: val1, key2: val2, ...}, session: {key1: val1, key2: val2, ...}}
     evaluateOnNewDocument_callback: null,
-    extraRequestHeaders: {}, // additional HTTP request headers - {authorization: 'JWT ...'}
-    blockResources: ['image', 'stylesheet'], // resuources to block during the request, for example: ['image', 'stylesheet', 'font', 'script']
+    extraRequestHeaders: { 'x-auth': 'abc1234' }, // additional HTTP request headers - {authorization: 'JWT ...'}
+    blockResources: [], // resuources to block during the request, for example: ['image', 'stylesheet', 'font', 'script']
     gotoOpts: {}, // used in page.goto(url, opts) - {referer:string, timeout:number, waitUntil:'load'|'domcontentloaded'|'networkidle0'|'networkidle2'} - https://pptr.dev/api/puppeteer.gotooptions
-    closeBrowser: true, // close browser after answer is received or on page.goto error
+    closeBrowser: false, // close browser after answer is received or on page.goto error
     waitCSSselector: null,
     postGoto: null, // function which will be executed after page.goto(), scroll, click on popup, etc. for example: postGoto: page => {page.evaluate(...);}
     debug: false

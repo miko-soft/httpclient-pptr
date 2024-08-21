@@ -3,10 +3,18 @@ const { HttpClientPptr } = require('../../index.js');
 
 
 /**
- * $ node 10waitCSSselector.js "https://www.dex8.com"
+ * $ node 12postGoto.js "https://www.dex8.com"
  */
 const openURL = async (url) => {
   console.log(` ...opening "${url}"`);
+
+  const postGoto = async page => {
+    const h1 = await page.evaluate(() => {
+      const h1Element = document.querySelector('h1');
+      return h1Element ? h1Element.innerText : null;
+    });
+    return h1;
+  };
 
   const opts = {
     puppeteerLaunchOptions: {
@@ -26,6 +34,7 @@ const openURL = async (url) => {
     },
     device: null, // {name, userAgent, viewport}
     cookies: null, // [{name, value, domain, path, expires, httpOnly, secure}, ...]
+    storage: null, // localStorage and sessionStorage {local: {key1: val1, key2: val2, ...}, session: {key1: val1, key2: val2, ...}}
     evaluateOnNewDocument_callback: null,
     extraRequestHeaders: {}, // additional HTTP request headers - {authorization: 'JWT ...'}
     blockResources: [], // resuources to block during the request, for example: ['image', 'stylesheet', 'font', 'script']
@@ -33,7 +42,7 @@ const openURL = async (url) => {
     closeBrowser: false, // close browser after answer is received or on page.goto error
     // waitCSSselector: { selector: 'footer#bad', timeout: 5000 }, // bad css selector
     waitCSSselector: { selector: 'footer#rs-footer', timeout: 5000 }, // good css selector
-    postGoto: null, // function which will be executed after page.goto(), scroll, click on popup, etc. for example: postGoto: page => {page.evaluate(...);}
+    postGoto, // function which will be executed after page.goto(), scroll, click on popup, etc. for example: postGoto: page => {page.evaluate(...);}
     debug: false
   };
   const hcp = new HttpClientPptr(opts);

@@ -3,7 +3,7 @@ const { HttpClientPptr } = require('../../index.js');
 
 
 /**
- * $ node 07set_evaluateOnNewDocument.js "https://www.dex8.com"
+ * $ node 07set_storage.js "https://www.dex8.com"
  */
 const openURL = async (url) => {
   console.log(` ...opening "${url}"`);
@@ -23,6 +23,7 @@ const openURL = async (url) => {
     },
     device: null, // {name, userAgent, viewport}
     cookies: null, // [{name, value, domain, path, expires, httpOnly, secure}, ...]
+    storage: null, // localStorage and sessionStorage {local: {key1: val1, key2: val2, ...}, session: {key1: val1, key2: val2, ...}}
     evaluateOnNewDocument_callback: null,
     extraRequestHeaders: {}, // additional HTTP request headers - {authorization: 'JWT ...'}
     blockResources: [], // resuources to block during the request, for example: ['image', 'stylesheet', 'font', 'script']
@@ -37,15 +38,19 @@ const openURL = async (url) => {
 
   hcp.injectPuppeteer(puppeteer);
   hcp.set_executablePath({ linux: '/usr/bin/google-chrome', win32: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', darwin: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' });
-  hcp.set_window(1300, 1000, 20, 50);
+  hcp.set_window(1300, 1000, 400, 50);
 
-  // set window.navigator.webdriver to false (open chrome console and check)
-  const cb = () => {
-    Object.defineProperty(navigator, 'webdriver', {
-      get: () => false,
-    });
+  const storageObj = {
+    local: {
+      key1: 'test1',
+      'key-2': { val: 33 }
+    },
+    session: {
+      key3: 'test3',
+      'key-4': { val: 88 }
+    }
   };
-  hcp.set_evaluateOnNewDocument(cb);
+  hcp.set_storage(storageObj);
 
   const answer = await hcp.askOnce(url);
   hcp.print(answer);

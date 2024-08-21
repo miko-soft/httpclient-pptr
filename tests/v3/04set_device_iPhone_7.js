@@ -23,6 +23,7 @@ const openURL = async (url) => {
     },
     device: null, // {name, userAgent, viewport}
     cookies: null, // [{name, value, domain, path, expires, httpOnly, secure}, ...]
+    storage: null, // localStorage and sessionStorage {local: {key1: val1, key2: val2, ...}, session: {key1: val1, key2: val2, ...}}
     evaluateOnNewDocument_callback: null,
     extraRequestHeaders: {}, // additional HTTP request headers - {authorization: 'JWT ...'}
     blockResources: [], // resuources to block during the request, for example: ['image', 'stylesheet', 'font', 'script']
