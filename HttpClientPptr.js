@@ -51,7 +51,7 @@ class HttpClientPptr {
    * @param {object} pathsObj - {linux: '/usr/bin/google-chrome', win32: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', darwin: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'}
    */
   set_executablePath(pathsObj) {
-    if (pathsObj) { pathsObj = { linux: '/usr/bin/google-chrome', win32: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', darwin: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' }; }
+    if (!pathsObj) { pathsObj = { linux: '/usr/bin/google-chrome', win32: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', darwin: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' }; }
     const osPlatform = os.platform(); // possible values are: 'darwin', 'freebsd', 'linux', 'sunos' or 'win32'
     this.opts.puppeteerLaunchOptions.executablePath = pathsObj[osPlatform];
   }
